@@ -1,3 +1,3 @@
 # xrl
 
-sliding window token bucket client rate limiter
+client rate limiter
