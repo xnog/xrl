@@ -47,7 +47,7 @@ func NewTokenBucketRateLimiter(client *redis.Client, key string, capacity int, r
 
 		if tokens >= 1 then
 			redis.call("incrbyfloat", key, -1)
-			redis.call("incr", key .. ":process")
+			redis.call("setex", key .. ":process", 60, process + 1)
 			return 0
 		else
 			return 1
