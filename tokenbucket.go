@@ -33,19 +33,21 @@ func NewTokenBucketRateLimiter(client *redis.Client, key string, capacity int, r
 		local capacity = tonumber(ARGV[1])
 		local rate = tonumber(ARGV[2])
 
-		local values = redis.call("mget", key, key .. ":timestamp")
+		local values = redis.call("mget", key, key .. ":timestamp", key .. ":process")
 		local tokens = tonumber(values[1] or 0)
 		local timestamp = tonumber(values[2] or 0)
+		local process = tonumber(values[3] or 0)
 
 		local now = redis.call("time")[1]
 		local elapsed = now - timestamp
 
-		tokens = math.min(capacity, tokens + elapsed * rate)
+		tokens = math.min(capacity - process, tokens + elapsed * rate)
 
 		redis.call("mset", key, tokens, key .. ":timestamp", now)
 
 		if tokens >= 1 then
 			redis.call("incrbyfloat", key, -1)
+			redis.call("incr", key .. ":process")
 			return 0
 		else
 			return 1
@@ -60,7 +62,7 @@ func NewTokenBucketRateLimiter(client *redis.Client, key string, capacity int, r
 	}
 }
 
-func (r *TokenBucketRateLimiter) Wait(ctx context.Context) error {
+func (r *TokenBucketRateLimiter) Take(ctx context.Context) error {
 	for {
 		l, err := r.script.Run(ctx, r.client, r.keys, r.args...).Int()
 		if err != nil {
@@ -75,4 +77,9 @@ func (r *TokenBucketRateLimiter) Wait(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (r *TokenBucketRateLimiter) Put(ctx context.Context) error {
+	_, err := r.client.Decr(ctx, r.keys[0]+":process").Result()
+	return err
 }
